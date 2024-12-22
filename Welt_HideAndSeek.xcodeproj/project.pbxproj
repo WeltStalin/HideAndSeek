@@ -255,6 +255,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Welt-HideAndSeek-Info.plist";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "需要使用本地网络来与附近的玩家进行游戏连接";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "需要访问您的位置来实时更新您在游戏中的位置";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "需要访问您的位置来显示您在游戏中的位置";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -285,6 +286,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Welt-HideAndSeek-Info.plist";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "需要使用本地网络来与附近的玩家进行游戏连接";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "需要访问您的位置来实时更新您在游戏中的位置";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "需要访问您的位置来显示您在游戏中的位置";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
