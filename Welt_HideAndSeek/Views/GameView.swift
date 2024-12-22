@@ -23,7 +23,7 @@ struct GameView: View {
                             PlayerLocationMarker(
                                 playerName: annotation.name,
                                 color: annotation.color,
-                                isCurrentPlayer: annotation.id == roomViewModel.currentPlayer?.id
+                                isCurrentPlayer: annotation.isCurrentPlayer
                             )
                         }
                 }
@@ -122,7 +122,7 @@ struct GameView: View {
         }
     }
     
-    // 获取玩家标注
+    // 获取玩家���注
     private func getPlayerAnnotations() -> [PlayerAnnotation] {
         roomViewModel.players.compactMap { player in
             guard let location = gameViewModel.playerLocations[player.id] else { return nil }
@@ -140,7 +140,8 @@ struct GameView: View {
                 id: player.id,
                 name: player.name,
                 location: location,
-                color: color
+                color: color,
+                isCurrentPlayer: player.id == roomViewModel.currentPlayer?.id
             )
         }
     }
@@ -196,6 +197,7 @@ struct PlayerAnnotation: Identifiable {
     let name: String
     let location: CLLocationCoordinate2D
     let color: Color
+    let isCurrentPlayer: Bool
 }
 
 // 修改玩家位置标记视图

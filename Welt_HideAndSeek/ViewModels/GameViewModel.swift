@@ -29,6 +29,30 @@ class GameViewModel: ObservableObject {
         case runnerWin
     }
     
+    init() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handlePlayerLocationUpdate),
+            name: .playerLocationUpdated,
+            object: nil
+        )
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    @objc private func handlePlayerLocationUpdate(_ notification: Notification) {
+        guard let playerId = notification.userInfo?["playerId"] as? String,
+              let location = notification.userInfo?["location"] as? CLLocationCoordinate2D else {
+            return
+        }
+        
+        DispatchQueue.main.async {
+            self.updateLocation(playerId: playerId, location: location)
+        }
+    }
+    
     func resetGame() {
         gameTimer?.invalidate()
         gameTimer = nil
@@ -67,17 +91,23 @@ class GameViewModel: ObservableObject {
     
     func updateLocation(playerId: String, location: CLLocationCoordinate2D) {
         playerLocations[playerId] = location
-        checkCatchStatus(playerId: playerId)
+        
+        if let player = currentPlayers.first(where: { $0.id == playerId }),
+           player.role == .seeker {
+            checkCatchStatus(seekerId: playerId)
+        }
     }
     
-    private func checkCatchStatus(playerId: String) {
-        guard let currentLocation = playerLocations[playerId] else { return }
+    private func checkCatchStatus(seekerId: String) {
+        guard let seekerLocation = playerLocations[seekerId] else { return }
         
-        for (otherPlayerId, otherLocation) in playerLocations {
-            if otherPlayerId != playerId {
-                let distance = calculateDistance(from: currentLocation, to: otherLocation)
+        let runners = currentPlayers.filter { $0.role == .runner && !caughtPlayers.contains($0.id) }
+        
+        for runner in runners {
+            if let runnerLocation = playerLocations[runner.id] {
+                let distance = calculateDistance(from: seekerLocation, to: runnerLocation)
                 if distance <= catchDistance {
-                    handleCatch(seekerId: playerId, runnerId: otherPlayerId)
+                    handleCatch(seekerId: seekerId, runnerId: runner.id)
                 }
             }
         }
