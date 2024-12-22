@@ -136,42 +136,16 @@ class NetworkManager: ObservableObject {
         )
     }
     
-    // 修改玩家加入的模拟方法
-    private func trySimulatePlayerJoining(roomId: String, player: Player) {
-        guard let index = mockRooms.firstIndex(where: { $0.id == roomId }) else { return }
+    // 开始模拟位置更新
+    private func startLocationSimulation(for player: Player, near baseLocation: CLLocationCoordinate2D) {
+        // 保存基准位置
+        playerBaseLocations[player.id] = baseLocation
         
-        let room = mockRooms[index]
-        guard room.players.count < room.maxPlayers else { return }
-        guard room.gameStatus == .waiting else { return }
+        // 停止现有的计时器
+        locationUpdateTimers[player.id]?.invalidate()
         
-        // 更新房间玩家列表
-        var updatedRoom = room
-        updatedRoom.players.append(player)
-        mockRooms[index] = updatedRoom
-        
-        // 获取基准位置
-        let baseLocation: CLLocationCoordinate2D
-        if let hostLocation = playerBaseLocations[room.host.id] {
-            baseLocation = hostLocation
-        } else {
-            // 如果没有房主位置，使用默认位置
-            baseLocation = CLLocationCoordinate2D(
-                latitude: 35.681236,
-                longitude: 139.767125
-            )
-            // 为房主设置基准位置
-            playerBaseLocations[room.host.id] = baseLocation
-            // 如果房主还没有位置模拟，也为房主启动位置模拟
-            if locationUpdateTimers[room.host.id] == nil {
-                startLocationSimulation(for: room.host, near: baseLocation)
-            }
-        }
-        
-        // 为新玩家生成一个随机位置（在基准位置附近）
+        // 立即发送一个初始位置
         let initialLocation = generateRandomLocation(near: baseLocation)
-        playerBaseLocations[player.id] = initialLocation
-        
-        // 立即发送初始位置
         NotificationCenter.default.post(
             name: .playerLocationUpdated,
             object: nil,
@@ -181,41 +155,12 @@ class NetworkManager: ObservableObject {
             ]
         )
         
-        // 开始位置模拟
-        startLocationSimulation(for: player, near: initialLocation)
-        
-        // 通知房间状态更新
-        NotificationCenter.default.post(
-            name: .roomUpdated,
-            object: nil,
-            userInfo: ["roomId": roomId, "room": updatedRoom]
-        )
-        
-        // 有一定概率继续添加新玩家
-        if Double.random(in: 0...1) < 0.3 {
-            let remainingPlayers = mockPlayers.filter { mockPlayer in
-                !updatedRoom.players.contains { $0.id == mockPlayer.id }
-            }
-            
-            if let nextPlayer = remainingPlayers.first {
-                let randomDelay = Double.random(in: 1...5)
-                DispatchQueue.main.asyncAfter(deadline: .now() + randomDelay) { [weak self] in
-                    self?.trySimulatePlayerJoining(roomId: roomId, player: nextPlayer)
-                }
-            }
-        }
-    }
-    
-    // 修改位置模拟方法，使每个玩家都有自己的基准位置
-    private func startLocationSimulation(for player: Player, near baseLocation: CLLocationCoordinate2D) {
-        // 停止现有的计时器
-        locationUpdateTimers[player.id]?.invalidate()
-        
         // 创建新的计时器，每1-3秒更新一次位置
         let timer = Timer.scheduledTimer(withTimeInterval: Double.random(in: 1...3), repeats: true) { [weak self] _ in
-            guard let self = self else { return }
+            guard let self = self,
+                  let baseLocation = self.playerBaseLocations[player.id] else { return }
             
-            // 生成新的随机位置（以玩家自己的基准位置为中心）
+            // 生成新的随机位置
             let newLocation = self.generateRandomLocation(near: baseLocation)
             
             // 通知位置更新
@@ -243,6 +188,15 @@ class NetworkManager: ObservableObject {
     func addRoom(_ room: Room) {
         mockRooms.append(room)
         
+        // 获取房主位置作为基准位置
+        let defaultLocation = CLLocationCoordinate2D(
+            latitude: 35.681236,
+            longitude: 139.767125
+        )
+        
+        // 为房主开始位置模拟
+        startLocationSimulation(for: room.host, near: defaultLocation)
+        
         // 随机决定要加入的玩家数量（1-5个）
         let numberOfPlayersToJoin = Int.random(in: 1...5)
         var availablePlayers = mockPlayers.shuffled() // 随机打乱玩家顺序
@@ -255,35 +209,60 @@ class NetworkManager: ObservableObject {
             let randomDelay = Double.random(in: 1...10)
             
             DispatchQueue.main.asyncAfter(deadline: .now() + randomDelay) { [weak self] in
-                self?.trySimulatePlayerJoining(roomId: room.id, player: availablePlayers[i])
+                self?.trySimulatePlayerJoining(roomId: room.id, player: availablePlayers[i], baseLocation: defaultLocation)
             }
         }
     }
     
-    // 修改房间更新方法，处理游戏状态变化
+    // 修改玩家加入的模拟方法
+    private func trySimulatePlayerJoining(roomId: String, player: Player, baseLocation: CLLocationCoordinate2D) {
+        guard let index = mockRooms.firstIndex(where: { $0.id == roomId }) else { return }
+        
+        let room = mockRooms[index]
+        guard room.players.count < room.maxPlayers else { return }
+        guard room.gameStatus == .waiting else { return }
+        
+        // 更新房间玩家列表
+        var updatedRoom = room
+        updatedRoom.players.append(player)
+        mockRooms[index] = updatedRoom
+        
+        // 开始位置模拟
+        startLocationSimulation(for: player, near: baseLocation)
+        
+        // 通知房间状态更新
+        NotificationCenter.default.post(
+            name: .roomUpdated,
+            object: nil,
+            userInfo: ["roomId": roomId, "room": updatedRoom]
+        )
+        
+        // 有一定概率（30%）在短暂延迟后继续添加新玩家
+        if Double.random(in: 0...1) < 0.3 {
+            let remainingPlayers = mockPlayers.filter { mockPlayer in
+                !updatedRoom.players.contains { $0.id == mockPlayer.id }
+            }
+            
+            if let nextPlayer = remainingPlayers.first {
+                // 1-5秒的随机延迟
+                let randomDelay = Double.random(in: 1...5)
+                DispatchQueue.main.asyncAfter(deadline: .now() + randomDelay) { [weak self] in
+                    self?.trySimulatePlayerJoining(roomId: roomId, player: nextPlayer, baseLocation: baseLocation)
+                }
+            }
+        }
+    }
+    
+    // 更新房间信息
     func updateRoom(_ room: Room) {
         if let index = mockRooms.firstIndex(where: { $0.id == room.id }) {
             let oldRoom = mockRooms[index]
             mockRooms[index] = room
             
-            // 如果游戏状态发生变化
-            if oldRoom.gameStatus != room.gameStatus {
-                switch room.gameStatus {
-                case .playing:
-                    // 游戏开始时，确保所有玩家都有位置模拟
-                    for player in room.players {
-                        if locationUpdateTimers[player.id] == nil,
-                           let baseLocation = playerBaseLocations[player.id] {
-                            startLocationSimulation(for: player, near: baseLocation)
-                        }
-                    }
-                case .finished:
-                    // 游戏结束时，停止所有位置模拟
-                    for player in room.players {
-                        stopLocationSimulation(for: player.id)
-                    }
-                case .waiting:
-                    break
+            // 如果游戏结束，停止所有位置模拟
+            if room.gameStatus == .finished {
+                for player in room.players {
+                    stopLocationSimulation(for: player.id)
                 }
             }
         }
